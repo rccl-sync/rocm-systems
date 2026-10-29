@@ -32,6 +32,21 @@ Pythonic API for RCCL collective operations.
   runtime via `dlopen`. `pip install .` works on a ROCm host
   without `CUDA_HOME`.
 
+After [installing](#installation), verify the installation and inspect the
+loaded component versions:
+
+```python
+import nccl.core as nccl
+
+nccl.show_versions()
+```
+
+`nccl.core` ships inline type information for
+[PEP 561](https://peps.python.org/pep-0561/)-compatible type checkers.
+
+See [`examples/01_basic`](examples/01_basic) for MPI-based collective and
+point-to-point examples.
+
 ## Requirements
 
 - **Runtime:** `librccl.so` resolved at first use. Discovery order:
@@ -45,9 +60,21 @@ Pythonic API for RCCL collective operations.
 - **Python deps:** `hip-python`, `numpy`, `packaging` (resolved
   automatically by `pip`).
 
+## Experimental Cython Support
+
+The wheel includes `nccl/bindings/cynccl.pxd` as an experimental Cython API:
+
+```cython
+from nccl.bindings cimport cynccl
+```
+
+This allows Cython extensions to call RCCL/NCCL functions with minimal Python
+overhead.
+
 ## Installation
 
-`pip install .` is the supported install path on ROCm:
+`pip install .` is the supported install path on ROCm. The commands below use
+`projects/rccl/bindings/nccl4py` as the working directory:
 
 ```bash
 pip install .
@@ -63,6 +90,9 @@ pip install .
 For a development environment with the test extras:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+
 pip install -e .
 pip install pytest pytest-mpi pytest-cov mpi4py ml-dtypes
 ```
@@ -114,6 +144,7 @@ mpirun -np 2 python examples/01_basic/02_send_recv.py
 
 ## References
 
-- [RCCL](https://github.com/ROCm/rccl)
+- [RCCL](https://github.com/ROCm/rocm-systems/tree/develop/projects/rccl)
 - [RCCL documentation](https://rocm.docs.amd.com/projects/rccl/en/latest/)
 - [Upstream NVIDIA nccl4py](https://github.com/NVIDIA/nccl/tree/master/bindings/nccl4py)
+- [nccl4py package documentation](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/nccl4py.html)

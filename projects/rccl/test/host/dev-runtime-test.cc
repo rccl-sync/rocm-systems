@@ -1466,12 +1466,14 @@ protected:
   }
 
   // 2.31 added the CFT leader-election arms (cftUc / cftMc) and an optional
-  // needBarrier out-param. Both CFT arms delegate to symTeamObtainUcLe /
+  // needBarrier out-param; 2.32 added the `counted` selector for which LE slot
+  // those arms fill. Both CFT arms delegate to symTeamObtainUcLe /
   // symTeamObtainMcLe, which need the CFT device APIs this binary does not
-  // provide, so this suite drives the non-CFT path only: both flags stay
+  // provide, so this suite drives the non-CFT path only: the CFT flags stay
   // false, which is also how every non-CFT production call site invokes it.
   static ncclResult_t Obtain(ncclComm* comm, ncclTeam team, bool multimem, ncclDevrTeam** out) {
-    return symTeamObtain(comm, team, multimem, /*cftUc=*/false, /*cftMc=*/false, out, /*needBarrier=*/nullptr);
+    return symTeamObtain(comm, team, multimem, /*counted=*/false, /*cftUc=*/false, /*cftMc=*/false, out,
+                         /*needBarrier=*/nullptr);
   }
 };
 
@@ -2064,13 +2066,22 @@ protected:
   // Mirrors the anonymous struct symMemoryObtain all-gathers. Layout must match
   // for the hook to populate what the function then reads back. 2.31 appended
   // hostCftMode, which the function then requires every rank to agree on; the
-  // per-rank literals below leave it zero-initialised, matching the value a
-  // value-initialised comm reports.
+  // per-rank literals below leave it zero, matching the value a
+  // value-initialised comm reports. 2.32 inserted registerMask (must agree on
+  // every rank) and appended candidateRegistryId (reuse needs a unanimous
+  // match); the constructor fills them with what a winFlags=0 caller with no
+  // prior registration publishes, so the {numSegments, hasSysmem, totalSize}
+  // literals below keep their meaning.
   struct SegmentInfo {
     int numSegments;
     bool hasSysmemSegment;
+    int registerMask;
     size_t totalSize;
     int hostCftMode;
+    uint64_t candidateRegistryId;
+    SegmentInfo(int n, bool sysmem, size_t total)
+        : numSegments(n), hasSysmemSegment(sysmem), registerMask(ncclDevrRegisterAll), totalSize(total),
+          hostCftMode(0), candidateRegistryId(UINT64_MAX) {}
   };
 
   void SetUp() override {
@@ -2183,13 +2194,17 @@ TEST_F(SymMemoryObtainSetupTest, AllGatherFails_ReturnsErrorWithoutLinking) {
 }
 
 // Branch: populating our own segment sizes fails.
+// NCCL 2.32 moved the segment-info all-gather ahead of segment-size population
+// (the reuse decision needs every rank's candidate first), so the gather has
+// already run, with every rank agreeing, by the time population fails.
 TEST_F(SymMemoryObtainSetupTest, PopulateSegmentSizesFails_ReturnsError) {
   ScopedHook populate(g_devrPopulateSegmentSizes,
                       [](ncclDevrMemory*, int) { return ncclSystemError; });
-  ScopedHook gather(g_devrBootstrapAllGather, [](void*, void*, int) { return ncclSuccess; });
+  ScopedHook gather(g_devrBootstrapAllGather, GatherReporting({{1, false, 4096}, {1, false, 4096}}));
 
   EXPECT_NE(Obtain(), ncclSuccess);
-  EXPECT_EQ(gather.calls, 0);
+  EXPECT_EQ(gather.calls, 1);
+  EXPECT_EQ(populate.calls, 1);
   EXPECT_EQ(comm->devrState.memHead, nullptr);
 }
 
@@ -2409,7 +2424,10 @@ TEST_F(SymMemoryObtainRollbackTest, GinRegisterFails_UnbindsTeamsAndReturnsSpace
 TEST_F(SymMemoryObtainRollbackTest, RmaRegisterFails_ReturnsSpaceWithoutLinking) {
   PushTeam();
   RmaProxyTerms(comm, true);
-  ScopedHook gather(g_devrBootstrapAllGather, agreeing);
+  // RmaProxyTerms widens the comm to 4 ranks; every rank must report, since
+  // NCCL 2.32 rejects a peer whose registerMask disagrees (a zeroed entry would).
+  ScopedHook gather(g_devrBootstrapAllGather,
+                    GatherReporting({{1, false, 4096}, {1, false, 16384}, {1, false, 4096}, {1, false, 16384}}));
   ScopedHook alloc(g_devrSpaceAlloc, AllocAt(0));
   ScopedHook spaceFree(g_devrSpaceFree, [](ncclSpace*, int64_t, int64_t) { return ncclSuccess; });
   ScopedHook reg(g_devrRmaProxyRegister, [](ncclComm*, void*, size_t, void*[]) { return ncclSystemError; });

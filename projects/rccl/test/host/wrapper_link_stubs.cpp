@@ -29,12 +29,12 @@ typedef enum { NCCL_LOG_NONE=0, NCCL_LOG_ERROR=1, NCCL_LOG_VERSION=2,
                NCCL_LOG_TRACE=6 } ncclDebugLogLevel;
 
 // --- debug.cc ---
-int ncclDebugLevel = 3;  // NCCL_LOG_WARN
+uint32_t ncclDebugLevelMask = (1u << NCCL_LOG_ERROR) | (1u << NCCL_LOG_VERSION) | (1u << NCCL_LOG_WARN);  // NCCL_DEBUG=WARN
 uint64_t ncclDebugMask = 0x7fffffffffffffffULL;
 
 void ncclDebugLog(ncclDebugLogLevel level, unsigned long flags,
                   const char* filefunc, int line, const char* fmt, ...) {
-    if (level > ncclDebugLevel) return;
+    if (!(ncclDebugLevelMask & (1u << level))) return;
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);

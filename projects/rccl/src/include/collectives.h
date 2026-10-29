@@ -425,6 +425,9 @@ public:
 
 // Need a power of two to ensure it divides by parallelFactor (which is also a power of two)
 #define NCCL_PAT_NWORKERS 128
+// RCCL: NCCL_MAX_NTHREADS is 256, so the hierarchical (multi-RPN) PAT path must also leave room
+// for the algo-computation warp and the scatter/gather workers.
+#define NCCL_PAT_MULTI_RPN_NWORKERS 128
 
 static constexpr int PatUsed = 0x1, PatSkipped = 0x2;
 

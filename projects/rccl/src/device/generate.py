@@ -574,6 +574,15 @@ with open(os.path.join(gensrc, "host_table.cpp"), "w") as f:
   out = f.write
   out('#include "device.h"\n')
   out("\n")
+  # The funcId stored in ncclDevWorkBatch is the index emitted below, which only
+  # spans one unroll's functions (the host table holds a single unroll), not the
+  # total across all generated unrolls in primary_funcs.
+  host_fn_ids = [primary_to_index[Fn(*equivalent_primary(*fn))]
+                 for fn in func_rows if fn is not None and fn.unroll == local_unroll[0]]
+  out("static_assert(%d <= (1 << NCCL_DEV_WORK_BATCH_FUNC_ID_BITS), " % (max(host_fn_ids, default=-1) + 1))
+  out('"Device function IDs must fit in ncclDevWorkBatch");\n')
+  out("\n")
+
   out("// The key for the ncclDevFuncNameToId map is a 64-bit unsigned integer.\n")
   out("// Each field (coll, algo, proto, redop, ty, acc, pipeline) is packed into 4 bits,\n")
   out("// This allows up to 16 unique values per field. The layout is:\n")

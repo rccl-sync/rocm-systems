@@ -118,10 +118,19 @@ ncclResult_t ncclProfilerThreadDestroy(struct ncclComm* comm) { return g_ncclPro
 static bool DefaultProfilerPluginLoaded() { return false; }
 std::function<bool()> g_profilerPluginLoaded = DefaultProfilerPluginLoaded;
 bool ncclProfilerPluginLoaded(void) { return g_profilerPluginLoaded(); }
+// src/plugin/profiler.cc ncclProfilerDeviceMode: mirrors the real mapping so schedulers under test see
+// the same profilerMode bits they would with a plugin loaded (KernelPhase implies KernelCh).
+uint8_t ncclProfilerDeviceMode(int eActivationMask) {
+  if (!ncclProfilerPluginLoaded()) return 0;
+  uint8_t mode = 0;
+  if (eActivationMask & ncclProfileKernelCh) mode |= 1u << 0;
+  if (eActivationMask & ncclProfileKernelPhase) mode |= (1u << 0) | (1u << 1);
+  return mode;
+}
 void ncclProfilerProxyTraceDumpIfAny(void* profilerContext) { }
 ncclResult_t ncclRasCommFini(const struct ncclComm* comm) { return ncclSuccess; }
-ncclResult_t ncclRunDiagnosticsPassive(struct ncclComm* comm) { return ncclSuccess; }
-ncclResult_t ncclRunDiagnosticsActive(struct ncclComm* comm) { return ncclSuccess; }
+ncclResult_t ncclRunRasDiagnostics(struct ncclComm* comm) { return ncclSuccess; }
+ncclResult_t ncclRunDiagnostics(struct ncclComm* comm) { return ncclSuccess; }
 ncclResult_t ncclRegCleanup(struct ncclComm* comm) { return ncclSuccess; }
 ncclResult_t ncclRmaInit(struct ncclComm* comm) { return ncclSuccess; }
 ncclResult_t ncclRmaInitFromParent(struct ncclComm* comm, struct ncclComm* parent) { return ncclSuccess; }
@@ -172,8 +181,11 @@ ncclResult_t ncclMgmtTaskEnqueue(struct ncclAsyncJob*, ncclResult_t (*)(struct n
                                  struct ncclComm*) {
   return ncclSuccess;
 }
-ncclResult_t ncclGpuCftSupport(struct ncclComm* comm, int* gpuCftSupport) {
+ncclResult_t ncclGpuCftSupport(struct ncclComm* comm, int* gpuCftSupport, bool* gpuCftMulticastSupport,
+                               bool* gpuCftCountedSupport) {
   if (gpuCftSupport) *gpuCftSupport = 0;
+  if (gpuCftMulticastSupport) *gpuCftMulticastSupport = false;
+  if (gpuCftCountedSupport) *gpuCftCountedSupport = false;
   return ncclSuccess;
 }
 // Omitted when RCCL_STUBS_OMIT_ncclParamGraphStreamOrdering is defined -- the

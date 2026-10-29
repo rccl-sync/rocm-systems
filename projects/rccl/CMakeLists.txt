@@ -242,6 +242,10 @@ endif()
 
 set(GPU_TARGETS "${SUPPORTED_GPUS}")
 
+# TLS backend for socket encryption (src/misc/crypt.cc). Empty (default) keeps encryption disabled.
+set(TLS_BACKEND "$ENV{TLS_BACKEND}" CACHE STRING "TLS backend (empty or OPENSSL3)")
+set_property(CACHE TLS_BACKEND PROPERTY STRINGS "" OPENSSL3)
+
 # Fail fast if we ended up with no GPU targets at all
 if(NOT GPU_TARGETS OR "${GPU_TARGETS}" STREQUAL "NOTFOUND")
   message(FATAL_ERROR
@@ -670,6 +674,16 @@ if(BUILD_BFD)
   else()
     message(WARNING "bfd.h header not found - Disabling custom backtrace")
   endif()
+endif()
+
+## TLS (OpenSSL3) socket encryption; libssl is dlopen'ed at runtime, only headers are needed here
+set(NCCL_TLS_INCLUDE_DIRS)
+if(TLS_BACKEND STREQUAL "OPENSSL3")
+  find_package(OpenSSL 3.0 REQUIRED COMPONENTS SSL Crypto)
+  add_compile_definitions(NCCL_TLS_BACKEND_OPENSSL3=1)
+  list(APPEND NCCL_TLS_INCLUDE_DIRS ${OPENSSL_INCLUDE_DIR})
+elseif(NOT TLS_BACKEND STREQUAL "")
+  message(FATAL_ERROR "Unsupported TLS_BACKEND '${TLS_BACKEND}'; expected OPENSSL3 or empty")
 endif()
 
 

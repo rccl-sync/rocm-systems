@@ -357,6 +357,14 @@ ncclResult_t IbCastRmaIbProxyInit(void** ctx, uint64_t commId, ncclDebugLogger_t
   return IbCastGinIbInitType(ctx, commId, logFunction, ncclParamCastGinType());
 }
 
+// v16 getRmaProperties. The upstream IB proxy reports flushesAllPutsOnAnySignal only for
+// all-MLX5 merged devices; IB-CAST makes no such ordering guarantee across its CAST
+// paths, so it always reports false and the GIN barrier keeps its explicit flush.
+ncclResult_t IbCastRmaIbProxyGetRmaProperties(void* /*collComm*/, ncclRmaProperties_t* rmaProps) {
+  rmaProps->flushesAllPutsOnAnySignal = false;
+  return ncclSuccess;
+}
+
 ncclResult_t IbCastRmaIbProxyGetProperties(int dev, ncclNetProperties_t* props) {
   NCCLCHECK(netIbCast.getProperties(dev, props));
   props->netDeviceType = NCCL_NET_DEVICE_GIN_PROXY;
@@ -811,6 +819,7 @@ ncclResult_t IbCastRmaIbProxyIFlush(void* ginCtx, int context, void* mhandle, ui
 ncclRma_t IbCastRmaIbProxy = {"RMA_IB_PROXY",
                               IbCastRmaIbProxyInit,
                               IbCastDevices,
+                              IbCastRmaIbProxyGetRmaProperties,
                               IbCastRmaIbProxyGetProperties,
                               IbCastListen,
                               IbCastRmaIbProxyConnect,

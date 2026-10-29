@@ -22,6 +22,15 @@
 int64_t ncclParamEnqueueRearchEnable() { return g_loadParam("ENQUEUE_REARCH_ENABLE", 0); }
 
 int64_t ncclParamRasDiagnostics() { return g_loadParam("RUN_RAS_DIAGNOSTICS", 0); }
+int64_t ncclParamRasEnable() { return g_loadParam("RAS_ENABLE", 1); }
+
+// src/ras/progress_monitor.cc: no RAS thread exists in this binary, so the monitor is a no-op.
+ncclResult_t ncclProgressCounterMonitorInit(struct ncclComm*) { return ncclSuccess; }
+ncclResult_t ncclProgressCounterMonitorDestroy(struct ncclComm*) { return ncclSuccess; }
+// src/device/common.cu kernel, launched by init.cc's GPU-timer calibration only when
+// NCCL_PROGRESS_COUNTERS is on; this host-only binary links no device code, so the
+// symbol just has to exist for the (void*) kernel-handle reference.
+void ncclProgressCounterCaptureGpuTime(uint64_t*) {}
 int64_t ncclParamDiagnostics() { return g_loadParam("RUN_DIAGNOSTICS", 0); }
 int64_t rcclParamIntraGraphGen() { return g_loadParam("INTRA_GRAPH_GEN", 0); }
 

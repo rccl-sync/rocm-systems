@@ -14,7 +14,7 @@
 
 // Declared here rather than including debug.h, which drags in the whole RCCL
 // logging layer; the definitions are supplied by whatever the test links.
-extern int ncclDebugLevel;
+extern uint32_t ncclDebugLevelMask;
 extern uint64_t ncclDebugMask;
 
 namespace RcclUnitTesting {
@@ -57,29 +57,48 @@ inline bool LogHas(const std::string& log, const char* needle) {
 }
 
 /**
- * @brief Raise ncclDebugLevel/ncclDebugMask for a scope, then restore both.
+ * @brief Map a scalar NCCL_DEBUG-style level to the ncclDebugLevelMask bit set.
  *
- * INFO is gated on ncclDebugLevel, which the fake logging layer pins to
- * NCCL_LOG_NONE, so an INFO-emitting path writes nothing and CaptureLog returns
- * an empty string. WARN and VERSION are ungated and need no guard. Construct
- * this before CaptureLog. Values are passed in so the caller keeps the
- * dependency on the NCCL_LOG_* / NCCL_ALL constants.
+ * Mirrors debug.cc's ncclDebugLevelToMask plus RCCL's ERROR bit: every level
+ * from ERROR (1) up to @p level is enabled, and ATTN (7) rides along from INFO
+ * (4) up. A negative @p level stands for "debug not yet initialised"
+ * (NCCL_DEBUG_LEVEL_MASK_UNINITIALIZED, ~0u), on which ncclDebugShouldLog
+ * always lets the message through. Numeric values are used because this
+ * header deliberately does not include debug.h / nccl_common.h.
+ */
+inline uint32_t DebugLevelMaskFor(int level) {
+  if (level < 0) return ~0u;
+  uint32_t mask = 0;
+  for (int l = 1; l <= level && l < 7; l++) mask |= 1u << l;
+  if (level >= 4) mask |= 1u << 7;
+  return mask;
+}
+
+/**
+ * @brief Raise ncclDebugLevelMask/ncclDebugMask for a scope, then restore both.
+ *
+ * INFO is gated on ncclDebugLevelMask, which the fake logging layer pins to 0
+ * (nothing enabled), so an INFO-emitting path writes nothing and CaptureLog
+ * returns an empty string. WARN and VERSION are ungated and need no guard.
+ * Construct this before CaptureLog. Values are passed in so the caller keeps
+ * the dependency on the NCCL_LOG_* / NCCL_ALL constants; @p level is the
+ * scalar level and is expanded with DebugLevelMaskFor.
  */
 class ScopedDebugLogging {
  public:
-  ScopedDebugLogging(int level, uint64_t mask) : level_(ncclDebugLevel), mask_(ncclDebugMask) {
-    ncclDebugLevel = level;
+  ScopedDebugLogging(int level, uint64_t mask) : levelMask_(ncclDebugLevelMask), mask_(ncclDebugMask) {
+    ncclDebugLevelMask = DebugLevelMaskFor(level);
     ncclDebugMask = mask;
   }
   ~ScopedDebugLogging() {
-    ncclDebugLevel = level_;
+    ncclDebugLevelMask = levelMask_;
     ncclDebugMask = mask_;
   }
   ScopedDebugLogging(const ScopedDebugLogging&) = delete;
   ScopedDebugLogging& operator=(const ScopedDebugLogging&) = delete;
 
  private:
-  int level_;
+  uint32_t levelMask_;
   uint64_t mask_;
 };
 
