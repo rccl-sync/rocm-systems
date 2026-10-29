@@ -5,7 +5,7 @@
  ************************************************************************/
 
 // Fakes for the symbols defined by src/config/collconfig.cc. No state, so no
-// reset. collTaskAppend reads a per-call config through these two, so a target
+// reset. collTaskAppend reads a per-call config through these, so a target
 // that includes enqueue.cc and covers collTaskAppend references them.
 //
 // The isolation predicate is reproduced rather than stubbed: it is pure
@@ -29,11 +29,16 @@ bool ncclCollConfigHasAlgSelection(const ncclCollConfig_t* config) {
   return config->algSelection != NCCL_CONFIG_UNDEF_PTR && config->algSelection[0] != '\0';
 }
 
+hipEvent_t ncclCollConfigGetLaunchCompletionEvent(const ncclCollConfig_t* c) {
+  return (c == nullptr || c->size == 0) ? nullptr : c->launchCompletionEvent;
+}
+
 bool ncclCollConfigNeedAggIsolate(const ncclCollConfig_t* config) {
   if (config->size == 0) return false;  // no user config passed
   if (config->minCTAs != NCCL_CONFIG_UNDEF_INT || config->maxCTAs != NCCL_CONFIG_UNDEF_INT) return true;
   if (config->nvlsCTAs != NCCL_CONFIG_UNDEF_INT) return true;
   if (ncclCollConfigHasAlgSelection(config)) return true;
+  if (ncclCollConfigGetLaunchCompletionEvent(config) != nullptr) return true;
   return false;
 }
 

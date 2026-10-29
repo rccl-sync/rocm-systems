@@ -31,6 +31,7 @@ constexpr size_t kP2pBytes = kCount * kP2pElemSize;
 constexpr size_t kCollSliceBytes = kCount * sizeof(float);
 
 const hipStream_t kStream = reinterpret_cast<hipStream_t>(0x5eedULL);
+const hipEvent_t kLaunchEvent = reinterpret_cast<hipEvent_t>(0xe7e7ULL);
 
 const void* OffsetBy(const void* base, size_t bytes) {
   return static_cast<const char*>(base) + bytes;
@@ -246,7 +247,7 @@ TEST_F(TaskClassifyMicrotest, EnqueueP2pTask_Called_BuildsTheRawTaskAndItsTuning
 
   ASSERT_EQ(ncclSuccess,
             classifyEnqueueP2pTask(scene.comm(), &queue, ncclFuncRecv, ncclFuncAlltoAll, buff.data(),
-                                   kCount, kP2pDatatype, kPeer, kStream));
+                                   kCount, kP2pDatatype, kPeer, kStream, kLaunchEvent));
 
   std::vector<struct ncclTaskTuningInfo*> tasks = QueueTasks(&queue);
   ASSERT_EQ(1u, tasks.size());
@@ -261,6 +262,7 @@ TEST_F(TaskClassifyMicrotest, EnqueueP2pTask_Called_BuildsTheRawTaskAndItsTuning
   EXPECT_EQ(kPeer, raw->sendRecv.peer);
   EXPECT_EQ(kP2pBytes, raw->sendRecv.bytes);
   EXPECT_EQ(kStream, raw->sendRecv.stream);
+  EXPECT_EQ(kLaunchEvent, raw->sendRecv.launchCompletionEvent);
   EXPECT_TRUE(CarriesNoTuningEstimate(tasks[0]->tuningOut));
   EXPECT_EQ(ncclSymkKernelId_Count, tasks[0]->tuningOut.symKernelId);
   EXPECT_EQ(ncclFuncRecv, tasks[0]->tuningIn.func);
@@ -275,10 +277,10 @@ TEST_F(TaskClassifyMicrotest, EnqueueP2pTask_TwoCalls_AppendInCallOrderWithDisti
 
   ASSERT_EQ(ncclSuccess,
             classifyEnqueueP2pTask(scene.comm(), &queue, ncclFuncSend, ncclFuncGather, sendBuff.data(),
-                                   kCount, kP2pDatatype, kRoot, kStream));
+                                   kCount, kP2pDatatype, kRoot, kStream, kLaunchEvent));
   ASSERT_EQ(ncclSuccess,
             classifyEnqueueP2pTask(scene.comm(), &queue, ncclFuncRecv, ncclFuncGather, recvBuff.data(),
-                                   kCount, kP2pDatatype, kPeer, kStream));
+                                   kCount, kP2pDatatype, kPeer, kStream, kLaunchEvent));
 
   const std::vector<TaskClassify_P2p> expected = {{ncclFuncSend, sendBuff.data(), kRoot},
                                                   {ncclFuncRecv, recvBuff.data(), kPeer}};
@@ -296,7 +298,7 @@ TEST_F(TaskClassifyMicrotest, EnqueueP2pTask_TuningInputFails_PropagatesAndLeave
 
   EXPECT_EQ(ncclInternalError,
             classifyEnqueueP2pTask(scene.comm(), &queue, ncclFuncSend, ncclFuncAlltoAll, buff.data(),
-                                   kCount, kP2pDatatype, kPeer, kStream));
+                                   kCount, kP2pDatatype, kPeer, kStream, kLaunchEvent));
 
   EXPECT_TRUE(ncclIntruQueueEmpty(&queue));
 }

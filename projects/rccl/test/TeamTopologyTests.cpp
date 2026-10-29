@@ -13,8 +13,10 @@
 #include <string>
 #include <vector>
 
-// Host prototypes for the team API; core__funcs.h carries only the __CUDACC__ device twins.
+// Host prototypes for the team API (moved from core.h to host.h in NCCL 2.32); core__funcs.h
+// carries only the __CUDACC__ device twins.
 #include "nccl_device/core.h"
+#include "nccl_device/host.h"
 
 // ncclTeamOuterFactor is NCCL_HOST_DEVICE_INLINE and sits outside every __CUDACC__ guard, so it is callable here.
 #include "nccl_device/impl/core__funcs.h"
