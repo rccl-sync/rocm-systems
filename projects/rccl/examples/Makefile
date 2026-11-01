@@ -8,6 +8,7 @@
 # NCCL Examples Main Makefile
 
 # Define all category directories
+# [RCCL] 09_gin_optimizations is shipped only under docs/examples (not ported to the RCCL examples build).
 CATEGORIES := 01_communicators 02_point_to_point 03_collectives 04_user_buffer_registration 05_symmetric_memory 06_device_api 07_kernel_fusion
 
 # The RAS examples require MPI; only build them when MPI=1

@@ -1415,20 +1415,22 @@ TEST_F(RmaScheduleTest, Batching_PullsPutsFromEveryContext) {
 }
 
 // The debug states that change which arm of a log predicate is taken. INFO is
-// `(level >= INFO && (flags & mask)) || level < 0`, and NCCLCHECKGOTO wraps its
-// backtrace in `if (ncclDebugNoWarn == 0)`, so covering both arms of each needs
-// the mask off and the "debug not yet initialised" level as well as the obvious
-// enabled state.
+// ncclDebugShouldLog: `levelMask uninitialised || ((flags & mask) && (levelMask & INFO bit))`,
+// and NCCLCHECKGOTO wraps its backtrace in `if (ncclDebugNoWarn == 0)`, so covering both arms
+// of each needs the mask off and the "debug not yet initialised" level mask as well as the
+// obvious enabled state.
+constexpr uint32_t kInfoLevelMask = (1u << NCCL_LOG_ERROR) | (1u << NCCL_LOG_VERSION) | (1u << NCCL_LOG_WARN) |
+                                    (1u << NCCL_LOG_INFO) | (1u << NCCL_LOG_ATTN);
 struct DebugState {
-  int level;
+  uint32_t levelMask;
   uint64_t mask;
   int noWarn;
 };
 const DebugState kDebugStates[] = {
-  {NCCL_LOG_INFO, ~0ULL, 0},  // logging on, backtrace printed
-  {NCCL_LOG_INFO, ~0ULL, 1},  // logging on, backtrace suppressed
-  {NCCL_LOG_INFO, 0ULL, 0},   // level passes, subsystem mask does not
-  {-1, ~0ULL, 0},             // debug not yet initialised
+  {kInfoLevelMask, ~0ULL, 0},                       // logging on, backtrace printed
+  {kInfoLevelMask, ~0ULL, 1},                       // logging on, backtrace suppressed
+  {kInfoLevelMask, 0ULL, 0},                        // level passes, subsystem mask does not
+  {NCCL_DEBUG_LEVEL_MASK_UNINITIALIZED, ~0ULL, 0},  // debug not yet initialised
 };
 
 // Which call in a repeated seam should fail; 1 = the first call.
@@ -1453,16 +1455,16 @@ struct FailAt {
 
 class RmaDebugLoggingTest : public RmaScheduleTest {
 protected:
-  int savedLevel_ = 0;
+  uint32_t savedLevelMask_ = 0;
   uint64_t savedMask_ = 0;
   int savedNoWarn_ = 0;
 
   void SetUp() override {
     RmaScheduleTest::SetUp();
-    savedLevel_ = ncclDebugLevel;
+    savedLevelMask_ = ncclDebugLevelMask;
     savedMask_ = ncclDebugMask;
     savedNoWarn_ = ncclDebugNoWarn;
-    ncclDebugLevel = NCCL_LOG_INFO;
+    ncclDebugLevelMask = kInfoLevelMask;
     ncclDebugMask = ~0ULL;  // every subsystem, so NCCL_COLL passes the mask test
     // Establish it rather than inherit it: the tests below that do not call
     // SetDebug exist to take NCCLCHECKGOTO's `ncclDebugNoWarn == 0` arm, and
@@ -1471,7 +1473,7 @@ protected:
   }
 
   void SetDebug(const DebugState& d) {
-    ncclDebugLevel = d.level;
+    ncclDebugLevelMask = d.levelMask;
     ncclDebugMask = d.mask;
     ncclDebugNoWarn = d.noWarn;
   }
@@ -1501,7 +1503,7 @@ protected:
   }
 
   void TearDown() override {
-    ncclDebugLevel = savedLevel_;
+    ncclDebugLevelMask = savedLevelMask_;
     ncclDebugMask = savedMask_;
     ncclDebugNoWarn = savedNoWarn_;
     RmaScheduleTest::TearDown();

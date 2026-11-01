@@ -58,6 +58,9 @@ BITCODE_LIB_ARCH ?= gfx950
 # RCCL device APIs are C++17.
 BITCODE_CXX_STD  ?= gnu++17
 
+# Enable all ReduceCopy type and block-size combinations in generated IR.
+NCCL_DEVICE_DEFINES := -DNCCL_DEVICE_PERMIT_EXPERIMENTAL_CODE=1
+
 ##### Output files #####
 UNOPTIMIZED_BC := $(OBJDIR)/librccl_device.bc.unoptimized
 OPTIMIZED_BC   := $(OBJDIR)/librccl_device.bc.optimized
@@ -81,6 +84,8 @@ ROCM_INCLUDES := \
 ##### Compiler flags #####
 # HIP device-only compilation. --offload-device-only is the modern
 # (target-agnostic) spelling of NCCL's --cuda-device-only.
+# Clang supports extended device lambdas but does not define nvcc's feature
+# macro; the ReduceCopy implementation is gated on it.
 COMMON_CLANG_FLAGS := \
 	-std=$(BITCODE_CXX_STD) \
 	-x hip \
@@ -89,6 +94,8 @@ COMMON_CLANG_FLAGS := \
 	--offload-arch=$(BITCODE_LIB_ARCH) \
 	$(RCCL_INCLUDES) $(ROCM_INCLUDES) \
 	-D__clang_llvm_bitcode_lib__ \
+	-D__CUDACC_EXTENDED_LAMBDA__ \
+	$(NCCL_DEVICE_DEFINES) \
 	-D__HIP_PLATFORM_AMD__=1
 
 CLANG_FLAGS := -c -emit-llvm -O1 $(COMMON_CLANG_FLAGS)
@@ -98,7 +105,16 @@ CLANG_FLAGS := -c -emit-llvm -O1 $(COMMON_CLANG_FLAGS)
 # dead globals. opt's internalize pass takes EXACT symbol names, not globs;
 # keep this list in sync with RCCL_DEVICE_BC_PUBLIC_API in CMakeLists.txt
 # and the NCCL_IR_EXPORT entries in nccl_device_wrapper.h.
-RCCL_DEVICE_BC_PUBLIC_API := ncclGetPeerPointerTeam,ncclCoopAnyInitThread,ncclCoopAnyInitWarp,ncclCoopAnyInitLanes,ncclCoopAnyInitWarpSpan,ncclCoopAnyInitCta,ncclCoopThreadRank,ncclCoopSize,ncclCoopNumThreads,ncclCoopSync,ncclLsaBarrierSessionInit,ncclLsaBarrierSessionArrive,ncclLsaBarrierSessionWait,ncclLsaBarrierSessionSync,ncclGinBarrierSessionInit,ncclGinBarrierSessionSync,ncclBarrierSessionInit,ncclBarrierSessionSync
+# ReduceCopy thunks: one per (family, type suffix), matching util.h's AMD type
+# list (no FP8) and omitting the NVLS-only ncclMultimem* families.
+RCCL_DEVICE_BC_REDUCE_COPY_FAMILIES := ncclLsaReduceSum ncclLsaCopy ncclLsaReduceSumCopy ncclLocalReduceSumCopy
+RCCL_DEVICE_BC_REDUCE_COPY_TYPES := I8 U8 I32 U32 I64 U64 F16 F32 F64 BF16
+RCCL_DEVICE_BC_COMMA := ,
+RCCL_DEVICE_BC_EMPTY :=
+RCCL_DEVICE_BC_SPACE := $(RCCL_DEVICE_BC_EMPTY) $(RCCL_DEVICE_BC_EMPTY)
+RCCL_DEVICE_BC_REDUCE_COPY_API := $(subst $(RCCL_DEVICE_BC_SPACE),$(RCCL_DEVICE_BC_COMMA),$(strip \
+	$(foreach f,$(RCCL_DEVICE_BC_REDUCE_COPY_FAMILIES),$(foreach t,$(RCCL_DEVICE_BC_REDUCE_COPY_TYPES),$(f)_$(t)))))
+RCCL_DEVICE_BC_PUBLIC_API := ncclGetPeerPointerTeam,ncclCoopAnyInitThread,ncclCoopAnyInitWarp,ncclCoopAnyInitLanes,ncclCoopAnyInitWarpSpan,ncclCoopAnyInitCta,ncclCoopThreadRank,ncclCoopSize,ncclCoopNumThreads,ncclCoopSync,ncclLsaBarrierSessionInit,ncclLsaBarrierSessionArrive,ncclLsaBarrierSessionWait,ncclLsaBarrierSessionSync,ncclGinBarrierSessionInit,ncclGinBarrierSessionInitAllContexts,ncclGinBarrierSessionSync,ncclBarrierSessionInit,ncclBarrierSessionSync,ncclLsaBarrierSessionDestroy,ncclGinBarrierSessionDestroy,ncclBarrierSessionDestroy,$(RCCL_DEVICE_BC_REDUCE_COPY_API)
 
 OPT_PASSES := --passes=internalize,inline,globaldce \
 	-internalize-public-api-list=$(RCCL_DEVICE_BC_PUBLIC_API)
@@ -120,7 +136,7 @@ $(WRAPPER_HEADER): nccl_device_wrapper.h
 	@echo "Copying nccl_device_wrapper.h -> $@"
 	cp -f $< $@
 
-$(UNOPTIMIZED_BC): $(LLVM_SRC) $(WRAPPER_HEADER) check_hipify
+$(UNOPTIMIZED_BC): $(LLVM_SRC) $(WRAPPER_HEADER) util.h check_hipify
 	@mkdir -p $(OBJDIR)
 	@echo "Generating unoptimized LLVM bitcode for $(BITCODE_LIB_ARCH)..."
 	$(CLANG) $(CLANG_FLAGS) $(LLVM_SRC) -o $@

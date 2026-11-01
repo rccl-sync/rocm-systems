@@ -218,6 +218,15 @@ ncclResult_t rocmLibraryInit(void);
 extern int ncclCudaDriverVersionCache;
 extern bool ncclCudaLaunchBlocking; // initialized by ncclCudaLibraryInit()
 
+// [RCCL] Upstream NCCL defines RUBIN_AND_LATER(sm) in cudawrap.h to select
+// NVIDIA Rubin-specific NVLink/tuning paths from the CUDA compute capability.
+// On AMD the "compute capability" is derived from the gfx arch (e.g. gfx1250
+// reports 12.5), which would falsely match the Rubin range, so it is pinned
+// to false here. cudawrap.h only defines it when not already defined.
+#ifndef RUBIN_AND_LATER
+#define RUBIN_AND_LATER(sm) (0 && (sm))
+#endif
+
 // [RCCL] cudawrap.h (now hipified) also defines ncclCudaDriverVersion. When a
 // translation unit pulls both rocmwrap.h and cudawrap.h in (e.g. via alloc.h)
 // we'd otherwise get a redefinition error. Pick a single canonical location.

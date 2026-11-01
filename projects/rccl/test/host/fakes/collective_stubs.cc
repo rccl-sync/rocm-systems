@@ -38,6 +38,14 @@ ASSERT_HOOK_MATCHES_PROD(g_ncclArgsGlobalCheck, ncclArgsGlobalCheck);
 
 // enqueue.h
 ncclResult_t ncclPrepareTasks(struct ncclComm*, bool*, bool*, ncclSimInfo_t*) { ::abort(); }
+// Pure check over planner state, reproduced so group.cc's pre-launch validation behaves as in prod.
+ncclResult_t ncclValidateCollConfigLaunchCompletionEvents(struct ncclComm* comm) {
+  if (comm->planner.nCollConfigLaunchCompletionEvents > 1) {
+    WARN("Only one launch-completion event may be provided in one NCCL group");
+    return ncclInvalidUsage;
+  }
+  return ncclSuccess;
+}
 ncclResult_t ncclTasksRegAndEnqueue(struct ncclComm*) { ::abort(); }
 ncclResult_t ncclLaunchPrepare(struct ncclComm*) { ::abort(); }
 ncclResult_t ncclLaunchKernelBefore_NoUncapturedCuda(struct ncclComm*, struct ncclKernelPlan*) { ::abort(); }

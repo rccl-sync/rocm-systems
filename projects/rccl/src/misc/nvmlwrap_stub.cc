@@ -50,6 +50,15 @@ ncclResult_t ncclNvmlDeviceGetName(nvmlDevice_t device, char* name, unsigned int
   return ncclSystemError;
 }
 
+ncclResult_t ncclNvmlSystemGetDriverVersion(char* version, unsigned int length) {
+  if (length > 0) version[0] = '\0';
+  return ncclSystemError;
+}
+
+ncclResult_t ncclNvmlDeviceGetFieldValues(nvmlDevice_t device, int valuesCount, nvmlFieldValue_t* values) {
+  return ncclSystemError;
+}
+
 ncclResult_t ncclNvmlDeviceGetMemoryErrorCounter(nvmlDevice_t device, nvmlMemoryErrorType_t errorType,
                                                  nvmlEccCounterType_t counterType, nvmlMemoryLocation_t locationType,
                                                  unsigned long long* count) {

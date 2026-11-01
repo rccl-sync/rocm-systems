@@ -65,6 +65,6 @@ ncclResult_t ncclRmaProxyReclaimPlan(struct ncclComm*, struct ncclKernelPlan*) {
 
 // device/onerank.cu
 ncclResult_t ncclLaunchOneRank(void*, void const*, size_t, struct ncclDevRedOpFull,
-                               ncclDataType_t, hipStream_t, void const*) {
+                               ncclDataType_t, hipStream_t, hipEvent_t, void const*) {
   FailLoudUnfaked("sched_stubs", "ncclLaunchOneRank");
 }

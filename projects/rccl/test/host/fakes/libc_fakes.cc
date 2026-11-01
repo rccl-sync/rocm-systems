@@ -15,6 +15,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cassert>
@@ -23,7 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 
-// LogCapture.hpp's ncclDebugLevel/ncclDebugMask come from fakes/nccl_fakes.cc,
+// LogCapture.hpp's ncclDebugLevelMask/ncclDebugMask come from fakes/nccl_fakes.cc,
 // which this binary already links. A libc-only unit reports via plain
 // fprintf(stderr), so CaptureLog works without raising the level.
 
@@ -317,3 +318,8 @@ __attribute__((noreturn)) void micro_exit(int status) {
 }
 
 }  // extern "C"
+
+// src/os/linux_ipcsocket.cc, which this binary does not link: production's
+// ncclIpcFdClose is a plain close(2), and p2p.cc's import/registration paths
+// (p2p-test.cc) rely on the fd really being closed.
+int ncclIpcFdClose(int fd) { return ::close(fd); }

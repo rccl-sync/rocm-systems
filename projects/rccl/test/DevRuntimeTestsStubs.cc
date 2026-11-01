@@ -41,6 +41,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <sys/mman.h>
+#include <unistd.h>
 
 // Count hipMemAddressFree for skip-on vs skip-off finalize tests.
 int rcclTestHipMemAddressFreeCount = 0;
@@ -50,7 +51,7 @@ int rcclTestHipMemUnmapCount = 0;
 // ---------------------------------------------------------------------------
 // Globals the translation unit references.
 // ---------------------------------------------------------------------------
-int                          ncclDebugLevel = 0;
+uint32_t                     ncclDebugLevelMask = 0;
 uint64_t                     ncclDebugMask  = 0;
 thread_local int             ncclDebugNoWarn = 0;
 // Use POSIX-FD handles so the single-rank success path takes the no-export /
@@ -263,14 +264,21 @@ int computeCftSize(struct ncclComm*) { return 1; }
 int computeCftMcSize(struct ncclComm*) { return 1; }
 ncclResult_t symBindTeamLe(struct ncclComm*, struct ncclDevrMemory*, ncclCftLeId) { return ncclSuccess; }
 ncclResult_t symUnbindTeamLe(struct ncclComm*, struct ncclDevrMemory*, ncclCftLeId) { return ncclSuccess; }
-ncclResult_t symTeamObtainUcLe(struct ncclComm*, struct ncclDevrTeam*, struct ncclDevrState*, bool* needBarrier) {
+ncclResult_t symTeamObtainUcLe(struct ncclComm*, struct ncclDevrTeam*, struct ncclDevrState*, bool* needBarrier,
+                               bool /*counted*/) {
   if (needBarrier) *needBarrier = false;
   return ncclSuccess;
 }
-ncclResult_t symTeamObtainMcLe(struct ncclComm*, struct ncclDevrTeam*, struct ncclDevrState*, bool* needBarrier) {
+ncclResult_t symTeamObtainMcLe(struct ncclComm*, struct ncclDevrTeam*, struct ncclDevrState*, bool* needBarrier,
+                               bool /*counted*/) {
   if (needBarrier) *needBarrier = false;
   return ncclSuccess;
 }
+
+// ---------------------------------------------------------------------------
+// IPC fd helper (src/os/linux_ipcsocket.cc).
+// ---------------------------------------------------------------------------
+int ncclIpcFdClose(int fd) { return close(fd); }
 
 // ---------------------------------------------------------------------------
 // Team accessors (host variants).
