@@ -16,7 +16,7 @@
 
 #include "nccl.h"
 #include "alloc.h"        // ncclCuMemEnable
-#include "debug.h"        // ncclDebugLog, ncclDebugLevel, ...
+#include "debug.h"        // ncclDebugLog, ncclDebugLevelMask, ...
 #include "param.h"        // ncclLoadParam
 #include "rocmwrap.h"     // ncclCuMemHandleType
 #include "utils.h"        // busIdToInt64
@@ -66,7 +66,7 @@ hipMemAllocationHandleType ncclCuMemHandleType =
 // Logging / param infrastructure
 // ---------------------------------------------------------------------------
 
-int                 ncclDebugLevel   = 0;   // NCCL_LOG_NONE
+uint32_t            ncclDebugLevelMask = 0; // no level enabled (NCCL_LOG_NONE)
 uint64_t            ncclDebugMask    = 0;
 thread_local int    ncclDebugNoWarn  = 0;
 

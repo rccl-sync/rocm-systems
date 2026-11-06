@@ -48,6 +48,11 @@ if(NOT DEFINED ROCM_PATH OR ROCM_PATH STREQUAL "")
 endif()
 set(ROCM_LLVM_BIN "${ROCM_PATH}/llvm/bin")
 
+# Enable all ReduceCopy type and block-size combinations in generated IR.
+set(NCCL_DEVICE_DEFINES
+  -DNCCL_DEVICE_PERMIT_EXPERIMENTAL_CODE=1
+)
+
 ##### Locate ROCm LLVM toolchain #####
 # RCCL's cmake_minimum_required is 3.16, which predates
 # `find_program(... REQUIRED)`, so check each one explicitly.
@@ -94,6 +99,7 @@ set(ROCM_INCLUDES
 ##### Compiler flags #####
 # HIP device-only compilation. --offload-device-only is the modern,
 # target-agnostic spelling of NCCL's --cuda-device-only.
+# Clang supports extended device lambdas but does not define nvcc's feature macro.
 set(COMMON_CLANG_FLAGS
   -std=${BITCODE_CXX_STD}
   -x hip
@@ -104,6 +110,8 @@ set(COMMON_CLANG_FLAGS
   ${ROCM_INCLUDES}
   -D__clang_llvm_bitcode_lib__
   -D__HIP_PLATFORM_AMD__=1
+  -D__CUDACC_EXTENDED_LAMBDA__
+  ${NCCL_DEVICE_DEFINES}
 )
 
 set(CLANG_FLAGS
@@ -127,10 +135,10 @@ add_custom_command(
   OUTPUT ${UNOPTIMIZED_BC}
   COMMAND ${CMAKE_COMMAND} -E make_directory ${OBJDIR}
   COMMAND ${CLANG_EXECUTABLE} ${CLANG_FLAGS} ${LLVM_SRC} -o ${UNOPTIMIZED_BC}
-  # Track both the impl TU (clang's direct input) and the staged wrapper
-  # header it transitively includes. Without the WRAPPER_HEADER dep,
-  # editing nccl_device_wrapper.h would not retrigger this command.
-  DEPENDS ${LLVM_SRC} ${WRAPPER_HEADER}
+  # Track both the impl TU (clang's direct input) and the headers it
+  # transitively includes. Without the WRAPPER_HEADER / util.h deps,
+  # editing either would not retrigger this command.
+  DEPENDS ${LLVM_SRC} ${WRAPPER_HEADER} ${CMAKE_CURRENT_SOURCE_DIR}/util.h
   COMMENT "Generating unoptimized LLVM bitcode for ${BITCODE_LIB_ARCH}..."
   VERBATIM
 )
@@ -141,7 +149,7 @@ add_custom_command(
 # but opt's `internalize` pass takes EXACT symbol names, not globs -- the
 # literal token "nccl*" matches no symbol, so every wrapper thunk gets
 # internalized and dropped to internal linkage. We list the public surface
-# explicitly instead; keep this set in sync with the NCCL_IR_EXTERN_C
+# explicitly instead; keep this set in sync with the NCCL_IR_EXPORT
 # entries in nccl_device_wrapper.h.
 set(RCCL_DEVICE_BC_PUBLIC_API
     # [A] Always-on
@@ -160,12 +168,27 @@ set(RCCL_DEVICE_BC_PUBLIC_API
     ncclLsaBarrierSessionArrive
     ncclLsaBarrierSessionWait
     ncclLsaBarrierSessionSync
+    ncclLsaBarrierSessionDestroy
     # [C] GIN + composite barrier session
     ncclGinBarrierSessionInit
+    ncclGinBarrierSessionInitAllContexts
     ncclGinBarrierSessionSync
+    ncclGinBarrierSessionDestroy
     ncclBarrierSessionInit
     ncclBarrierSessionSync
+    ncclBarrierSessionDestroy
 )
+# [D] ReduceCopy thunks, one per (family, type suffix). Keep the suffixes in
+# sync with NCCL_IR_TYPES in util.h as built for AMD: FP8 is excluded there
+# and the ncclMultimem* families are not emitted on AMD (NVLS/PTX-only).
+set(RCCL_DEVICE_BC_REDUCE_COPY_FAMILIES
+    ncclLsaReduceSum ncclLsaCopy ncclLsaReduceSumCopy ncclLocalReduceSumCopy)
+set(RCCL_DEVICE_BC_REDUCE_COPY_TYPES I8 U8 I32 U32 I64 U64 F16 F32 F64 BF16)
+foreach(_fam ${RCCL_DEVICE_BC_REDUCE_COPY_FAMILIES})
+  foreach(_ty ${RCCL_DEVICE_BC_REDUCE_COPY_TYPES})
+    list(APPEND RCCL_DEVICE_BC_PUBLIC_API ${_fam}_${_ty})
+  endforeach()
+endforeach()
 string(REPLACE ";" "," RCCL_DEVICE_BC_PUBLIC_API_CSV "${RCCL_DEVICE_BC_PUBLIC_API}")
 
 add_custom_command(

@@ -227,3 +227,8 @@ python3 -m sphinx -T -E -b html -d _build/doctrees -D language=en . _build/html
 All source code and accompanying documentation is copyright (c) 2015-2025, NVIDIA CORPORATION. All rights reserved.
 
 All modifications are copyright (c) 2019-2025 Advanced Micro Devices, Inc. All rights reserved.
+
+<!-- Rehearsal sync-20261101T192509Z-v2.32.3-1: a person push to start release round 2. -->
+
+<!-- Rehearsal sync-20261101T192509Z-v2.32.3-1: a person push to start release round 3. -->
+<!-- Rehearsal sync-20261101T192509Z-v2.32.3-1: a person push to start release round 4. -->

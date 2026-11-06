@@ -906,8 +906,10 @@ TEST_F(RmaCeNonPersistTest, NonPersist_TasksForDifferentPeers_BatchedIntoOneRoun
   auto batches = Batches();
   ASSERT_EQ(batches.size(), 2u);
   ASSERT_EQ(batches[0].size(), 2u);
-  EXPECT_EQ(batches[0][0].dst, PeerData(1));
-  EXPECT_EQ(batches[0][1].dst, PeerData(3));
+  // NCCL 2.32 issues peers in LSA-relative cyclic order starting after lsaSelf
+  // (kLsaSelf=3): lsa 4, 0, 1, 2 -> world peer 3 (lsa 1) precedes peer 1 (lsa 2).
+  EXPECT_EQ(batches[0][0].dst, PeerData(3));
+  EXPECT_EQ(batches[0][1].dst, PeerData(1));
 
   // Both peers signal in the same round, so each takes its own staging slot --
   // sharing one would make the second overwrite the first. Pinned on the staging
@@ -919,8 +921,8 @@ TEST_F(RmaCeNonPersistTest, NonPersist_TasksForDifferentPeers_BatchedIntoOneRoun
   ASSERT_EQ(batches[1].size(), 2u);
   EXPECT_EQ(batches[1][0].src, &ceCtx->signalOpSeqsDev[0]);
   EXPECT_EQ(batches[1][1].src, &ceCtx->signalOpSeqsDev[1]);
-  EXPECT_EQ(batches[1][0].dst, SelfSlotIn(1, ceCtx->signalOffset));
-  EXPECT_EQ(batches[1][1].dst, SelfSlotIn(3, ceCtx->signalOffset));
+  EXPECT_EQ(batches[1][0].dst, SelfSlotIn(3, ceCtx->signalOffset));
+  EXPECT_EQ(batches[1][1].dst, SelfSlotIn(1, ceCtx->signalOffset));
 }
 
 // Two tasks for the same peer cannot share a batch, because a batched copy does

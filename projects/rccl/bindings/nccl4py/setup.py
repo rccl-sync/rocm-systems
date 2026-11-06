@@ -7,8 +7,9 @@ import os
 import sys
 from pathlib import Path
 
+from setuptools import Extension, setup
+from setuptools.command.build_ext import build_ext
 from Cython.Build import cythonize
-from setuptools import setup, Extension
 
 # No CUDA_HOME requirement: after patching cynccl.pxd to drop the CUDA
 # driver-types include block, no CUDA/HIP headers are needed at compile
@@ -16,6 +17,14 @@ from setuptools import setup, Extension
 # is resolved at runtime via dlopen.
 
 ext_modules = ["nccl.bindings.nccl"]
+
+
+class BuildExt(build_ext):
+    """Upstream adds CUDA headers here when extension compilation starts.
+
+    RCCL needs no CUDA/HIP headers at compile time (see above), so this
+    keeps upstream's cmdclass hook without the CUDA_HOME lookup.
+    """
 
 
 def calculate_modules(module: str):
@@ -101,6 +110,7 @@ compiler_directives = {
 
 
 setup(
+    cmdclass={"build_ext": BuildExt},
     ext_modules=cythonize(
         ext_modules,
         verbose=True,
@@ -108,5 +118,4 @@ setup(
         compiler_directives=compiler_directives,
     ),
     zip_safe=False,
-    options={"build_ext": {"inplace": False}},
 )

@@ -112,6 +112,9 @@ extern hipError_t g_hipAsyncOpsResult;
 extern int g_hipWarpSize;
 // Backs hipDeviceGetAttribute(hipDeviceAttributeDirectManagedMemAccessFromHost); 1 is the MI300A answer.
 extern int g_hipDirectManagedMemAccess;
+// Backs hipDeviceGetAttribute(hipDeviceAttributeMemoryPoolsSupported). Default 1: commAlloc then creates
+// its pool, as it did unconditionally before NCCL 2.32 gated cudaMemPoolCreate on this attribute.
+extern int g_hipMemoryPoolsSupported;
 // A call count alone cannot tell one device copy's operands from another's, so record them per call.
 extern int g_hipMemcpyAsyncCalls;
 struct HipMemcpyAsyncRecord {
